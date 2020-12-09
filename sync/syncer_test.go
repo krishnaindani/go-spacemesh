@@ -33,7 +33,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5, false}
+var (
+	goldenATXID = types.ATXID(types.HexToHash32("77777"))
+	conf        = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5, false, goldenATXID}
+)
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -55,9 +58,10 @@ func (alwaysOkAtxDb) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 }
 
 const (
-	levelDB  = "LevelDB"
-	memoryDB = "MemoryDB"
-	Path     = "../tmp/sync/"
+	levelDB        = "LevelDB"
+	memoryDB       = "MemoryDB"
+	Path           = "../tmp/sync/"
+	layersPerEpoch = 10
 )
 
 var (
@@ -129,7 +133,7 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.NewDefault(id)
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
-	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithOptions(log.Nop))
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 }
 
@@ -140,7 +144,7 @@ func persistenceTeardown() {
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	lg := log.NewDefault(id)
 	mshdb := mesh.NewMemMeshDB(lg)
-	atxdb := activation.NewDB(database.NewMemDatabase(), &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithName("atxDB"))
+	atxdb := activation.NewDB(database.NewMemDatabase(), &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockState{}, lg)
 }
 
@@ -947,7 +951,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, nil, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, goldenATXID, 5, 1, goldenATXID, coinbase, 0, nil, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()

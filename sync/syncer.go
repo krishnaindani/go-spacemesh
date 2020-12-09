@@ -4,12 +4,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/events"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -18,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"strconv"
 )
 
 type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
@@ -82,6 +82,7 @@ type Configuration struct {
 	AtxsLimit       int
 	Hdist           int
 	AlwaysListen    bool
+	GoldenATXID     types.ATXID
 }
 
 var (
@@ -727,10 +728,9 @@ func (s *Syncer) fetchRefBlock(block *types.Block) error {
 func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
 	var atxs []types.ATXID
 
-	//todo: patch, remove when golden atx
-	//if blk.ATXID != *types.EmptyATXID{
-	atxs = append(atxs, blk.ATXID)
-	//}
+	if blk.ATXID != s.GoldenATXID {
+		atxs = append(atxs, blk.ATXID)
+	}
 	if blk.ActiveSet != nil {
 		if len(*blk.ActiveSet) > 0 {
 			atxs = append(atxs, *blk.ActiveSet...)
@@ -829,7 +829,7 @@ func (s *Syncer) FetchAtx(ID types.ATXID) error {
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
 func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
-	if atx.PositioningATX != *types.EmptyATXID {
+	if atx.PositioningATX != s.GoldenATXID {
 		s.Log.Info("going to fetch pos atx %v of atx %v", atx.PositioningATX.ShortString(), atx.ID().ShortString())
 		_, err := s.fetchAtx(atx.PositioningATX)
 		if err != nil {
@@ -837,7 +837,7 @@ func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
 		}
 	}
 
-	if atx.PrevATXID != *types.EmptyATXID {
+	if atx.PrevATXID != s.GoldenATXID {
 		s.Log.Info("going to fetch prev atx %v of atx %v", atx.PrevATXID.ShortString(), atx.ID().ShortString())
 		_, err := s.fetchAtx(atx.PrevATXID)
 		if err != nil {
